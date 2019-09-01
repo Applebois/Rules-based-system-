@@ -1,0 +1,5 @@
+#M5 -R -W -X -p4013,4012,50234 -Day3,1,5,7,2
+#-Ra -p4017 M3 -X -W -R
+#record rules on 1234567  && port 4013,4012,4010##R:1234567 M2 -p4013,4012,4010
+###helloooowoosdmaifonafo##R:1 M5 
+##helloooowoosdmaifonafo##R:1 M2 -X -R -p4010,4011

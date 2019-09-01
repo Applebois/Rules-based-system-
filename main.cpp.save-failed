@@ -1,0 +1,1368 @@
+#include <iostream>
+#include <fstream>
+#include <map>
+#include <sstream>
+#include <windows.h>
+#include <cstring>
+#include <string>
+#include "functionprototype.h"
+
+using namespace std;
+int const integer = 100;
+string LOGDATA[integer+1];
+
+
+int main()
+{
+ifstream read("logpattern.txt");
+string temp;
+int counter = 0;
+while(!read.eof())
+{
+    string data;
+    getline(read,data);
+    LOGDATA[counter]=data;
+    counter ++;
+}
+
+    ifstream readPort[21];
+    string StoreLog[21][10];
+    string portFile = "ports\\port40";
+    string rawLog;
+    for(int i =0 ; i<=20 ; i++)
+    {
+        string portFile = "ports\\port40";
+        if(i < 10)
+        {
+            portFile.insert(portFile.length(),"0");
+        }
+        portFile= portFile+to_string(i)+".txt";
+        readPort[i].open(portFile.c_str());
+        int counter = 0;
+        while(!readPort[i].eof())
+        {
+            getline(readPort[i],rawLog);
+            if(rawLog.compare("")!=0)
+            {
+                StoreLog[i][counter]=rawLog;
+            }
+            if(counter != 10)
+            {
+            }
+            counter = counter +1 ;
+        }
+        readPort[i].close();
+    }
+    defineFilterPolicy(StoreLog);
+    readFiltering();
+    return 0;
+}
+
+
+void defineFilterPolicy(string StoreLog[21][10] )
+{
+    int TotalPolicyRules=1;
+top:
+    ifstream readFilterPolicy("filterpolicy.txt");
+    if(!readFilterPolicy.good())
+    {
+        system("echo -idle -Ax -Aw -Ar>filterpolicy.txt");
+        goto top ;
+    }
+    while(!readFilterPolicy.eof())
+    {
+        string USER,policy,port,times,days="99";
+        int specificport, day, rowinaday,pointer=0;
+        bool idle = false,block = false, ALLPORT = true, Ax=false, moretimes=false, Ar=false, Aw=false,  idledisplay = false, Ra=false,jumpport= true,ALLDAY= true, actionsmorethan=false,  Au = true,FindUser = false,  Aux = false, Specificport = false,USEREXCEPT = false;
+        bool specificday=false, jumpday=false,blocksametime = false, comment = false, boolcontinuous = false, rules3 =false,defaults=true,jumpspecificport=false , jumpspecificday = false;
+        int dayfrom, dayend,continuoustimes ;
+
+        getline(readFilterPolicy,policy);
+        if (policy[0]=='#')
+        {
+            comment=true;
+        }
+        if(policy == "")
+        {
+            continue;
+        }
+
+        if(comment == true)
+        {
+            cout<<"Rules "<<TotalPolicyRules <<" SKIPPED "<<endl;
+            TotalPolicyRules = TotalPolicyRules +  1;
+            continue;
+        }
+        cout<<"\n-------------------------------------------------------------\n\n";
+        cout<<TotalPolicyRules<<" Policy Line \n"<<endl;
+        cout<<"Checklists :"<<endl;
+        //find port needed or not
+        int totalport;
+        int numberofport=0;
+        int PORTS[21];
+        //find port needed or not
+        std::size_t found =policy.find("-p",pointer);
+        if (found!=std::string::npos)
+        {
+            Specificport = true;
+            ALLPORT=false;
+            string test;
+            jumpport = false;
+            port= policy.substr(found+2,4);
+            for( int i = found+6 ; i < policy.length() ; i=i+4)
+            {
+                    if(policy[i-4]==32 || policy[i-4]==0)
+                {
+                    break;
+                }
+                else
+                {
+                    test=test+policy[i-4];
+                    test=test+policy[i-3];
+                    test=test+policy[i-2];
+                    test=test+policy[i-1];
+                }
+            }
+            totalport = test.length()/4;
+            if(totalport > 1)
+            {
+            if(jumpspecificport ==false)
+            {
+            cout<<"Record port ";
+            }
+            jumpspecificport=true;
+            }
+            int counter=0;
+            for(int i = 0 ; i<test.length() ; i=i+4 )
+            {
+                string temp;
+                temp = test.substr  ( i , 4);
+                numberofport = stoi(temp);
+                PORTS[counter]=numberofport;
+                cout<<PORTS[counter]<<" ";
+                counter++;
+            }
+            cout<<endl;
+            specificport = stoi(port);
+            specificport = specificport - 4000;
+        }
+
+        pointer = 0;    //find idle needed or not in the policy.txt
+        found =policy.find("-idle",pointer);
+        if (found!=std::string::npos)
+        {
+            idle=true;
+            actionsmorethan = false;
+            idledisplay = false;
+            cout<<"Idle "<<endl;
+        }
+        pointer = 0;    //Record any execution
+        found =policy.find("-Ax",pointer);
+        if (found!=std::string::npos)
+        {
+            Ax=true;
+            cout<<"Execution is require"<<endl;
+        }
+        pointer = 0;    //Record any read
+        found =policy.find("-Ar",pointer);
+        if (found!=std::string::npos)
+        {
+            Ar=true;
+            cout<<"Read is require "<<endl;
+        }
+        pointer = 0;    //Record any write
+        found =policy.find("-Aw",pointer);
+        if (found!=std::string::npos)
+        {
+            Aw=true;
+            cout<<"Write is require"<<endl;
+        }
+        pointer = 0;    //Record anonymous only
+        found =policy.find("-Ra",pointer);
+        if (found!=std::string::npos)
+        {
+            Ra=true;
+            FindUser = false;
+            Aux= false;
+            Au = false;
+            cout<<"Anonymous actions is require "<<endl;
+        }
+        pointer = 0;    //find all idle connections
+        found =policy.find("inactive more than",pointer);
+        if (found!=std::string::npos)
+        {
+            Aux =false;
+            FindUser=false;
+            idle = false;
+            Au =false;
+            actionsmorethan = false;
+            idledisplay = true;
+            defaults=false;
+            times = policy.substr(found+18,2);
+            rowinaday=stoi(times);
+            cout<<"Find inactive equal or more than"<<times<<endl;
+        }
+        pointer = 0;
+        int portfrom,portend;
+        string temp;
+        found =policy.find("-JP",pointer);             //jump port
+        if (found!=std::string::npos)
+        {
+            ALLPORT =false;
+            Specificport = false;
+            jumpport = true;
+
+            temp = policy.substr(found+3,4);
+            cout<<"Records on from port "<<temp<<" until ";
+            portfrom =stoi(temp);
+            portfrom = portfrom - 4000;
+            temp = policy.substr(found+8,4);
+            cout<<"port "<<temp<<" is require"<<endl;
+            portend =stoi(temp);
+            portend = portend - 4000;
+        }
+        pointer = 0;
+        found =policy.find("-JD",pointer);             //jump day
+        if (found!=std::string::npos)
+        {
+            ALLDAY =false;
+            specificday = false;
+            jumpday = true;
+            temp = policy.substr(found+3,2);
+            cout<<"Records on from port "<<temp<<" until ";
+            dayfrom =stoi(temp);
+            dayfrom = dayfrom;
+            temp = policy.substr(found+6,2);
+            cout<<"port "<<temp<<" is require"<<endl;
+            dayend =stoi(temp);
+            dayend = dayend+1;
+        }
+
+        int totalday;
+        int numberofday=0;
+        int daysrecordjump[10];
+        pointer = 0;
+        found = policy.find("-Day",pointer);             //record specific day
+        if (found!=std::string::npos)
+        {
+            specificday = true;
+            ALLDAY = false;
+            jumpday =false;
+            string test="";
+            days= policy.substr(found+4,1);
+            for( int i = found+5 ; i <=policy.length() ; i++)
+            {
+                    if(policy[i-1]==32 || policy[i-1]==0)
+                {
+                    break;
+                }
+                else
+                {
+                    test=test+policy[i-1];
+                }
+            }
+            totalday = test.length();
+            cout<<"days of totalday"<<totalday<<endl;
+            if(totalday > 1)
+            {
+            if(jumpspecificday ==false)
+            {
+            cout<<"Record port ";
+            }
+            jumpspecificday =true;
+            }
+            int counter=0;
+            cout<<" Days ";
+            for(int i = 0 ; i<test.length() ; i++)
+            {
+                string temp;
+                temp = test.substr  ( i , 1);
+                numberofday = stoi(temp);
+                daysrecordjump[counter]=numberofday;
+              cout<<daysrecordjump[counter]<<"  ";
+                counter++;
+
+            }
+            cout<<endl;
+            day=stoi(days);
+        }
+        found =policy.find("A!X",pointer);   // Record ALL USER EXCEPT ANONYMOUS
+        if (found!=std::string::npos)
+        {
+            Aux = true;
+            Au = false;
+            Ra = false;
+            FindUser = false;
+            cout<<"Record specific records ->ALL except Anonymous "<<endl;
+        }
+        pointer = 0;
+        found =policy.find("AuX",pointer);   // Record ALL USER EXCEPT ANONYMOUS
+        if (found!=std::string::npos)
+        {
+            USER = policy.substr(found+3,1);
+            USEREXCEPT = true;
+            Aux = false;
+            Au = false;
+            Ra = false;
+            FindUser = false;
+            for(int i=4; i<18; i++)
+            {
+                 if(policy[i-4]==32 || policy[i-4]==0)
+                {
+                    break;
+                }
+                else
+                {
+                    USER=USER+policy[i];
+                }
+            }
+            cout<<"Record specific records ->ALL except user "<<USER<<endl;
+        }
+        int action;
+        found =policy.find("actions more than",pointer);   // find action(r/x/w) more than
+        pointer = 0;
+        if (found!=std::string::npos && Aux == false)
+        {
+            idledisplay = false;
+            defaults=false;
+            actionsmorethan = true;
+            times = policy.substr(found+17,2);
+            action=stoi(times);
+            cout<<"BASELINE Total actions is "<<action<<endl;
+
+        }
+        pointer = 0;
+        found =policy.find("-Su",pointer);   // find SPECIFIC USERS
+        if (found!=std::string::npos  )
+        {
+            USER = policy.substr(found+3,1);
+            FindUser = true;
+            USEREXCEPT = false;
+            Aux = false;
+            Ra = false;
+            Au = false;
+            idle=false;
+            idledisplay=false;
+            for(int i=found + 4; i<policy.length(); i++)
+            {
+                if(policy[i-1]==32 || policy[i-1]==0)
+                {
+                    break;
+                }
+                else
+                {
+                    USER=USER+policy[i];
+                }
+            }
+            cout<<"Find this specific user records -> "<<USER<<endl;
+        }
+        int sametimeblock;
+        pointer = 0;
+        found =policy.find("-blocksametime",pointer);   // RECORD ALL DAYS AND ALL PORTS TO CHECK THE SAME USER AND ACTIONS
+        if (found!=std::string::npos  )
+        {
+            blocksametime=true;
+            boolcontinuous=false;
+            defaults=false;
+            rules3=false;
+            actionsmorethan=false;
+            string block;
+            block= policy.substr(found+14,2);
+            sametimeblock=stoi(block);
+            cout<<"Record this same time and day at the different port "<<sametimeblock<<endl;
+        }
+
+        pointer = 0;
+        found =policy.find("-C",pointer);   // RECORD ALL BLOCK ALL THE SAME TIME
+        if (found!=std::string::npos  )
+        {
+            boolcontinuous=true;
+            blocksametime=false;
+            rules3=false;
+            defaults=false;
+            actionsmorethan=false;
+            string temp5;
+            temp5= policy.substr(found+2,2);
+            continuoustimes=stoi(temp5);
+            cout<<"Continuously "<<continuoustimes<<endl;
+        }
+        int rules3time;
+        pointer = 0;
+        found =policy.find("attach",pointer);   // RECORD ALL BLOCK ALL THE SAME TIME
+        if (found!=std::string::npos  )
+        {
+            rules3=true;
+            boolcontinuous=false;
+            blocksametime=false;
+            defaults=false;
+            actionsmorethan=false;
+            string temp5;
+            temp5= policy.substr(found+6,2);
+            rules3time=stoi(temp5);
+            cout<<"Continuously "<<rules3time<<endl;
+        }
+
+        generatingLogs( USER,  days, times, idle, block, ALLPORT, Ax,moretimes, Ar, Aw, Ra, Au, ALLDAY, FindUser, Aux,StoreLog,day,idledisplay, rowinaday, actionsmorethan,action, Specificport, specificport,USEREXCEPT, jumpport,  portfrom,  portend,specificday, jumpday, dayfrom, dayend, TotalPolicyRules, blocksametime,sametimeblock,  boolcontinuous,  continuoustimes,rules3, rules3time,defaults, jumpspecificport , PORTS,totalport,jumpspecificday,totalday,numberofday,daysrecordjump);
+        TotalPolicyRules = TotalPolicyRules +  1;
+
+    }
+}
+//navigating to policy
+void generatingLogs(string USER, string days,string times,bool idle,bool block,bool ALLPORT,bool Ax,
+                    bool moretimes,bool Ar,bool Aw,bool Ra,bool Au,bool ALLDAY,bool FindUser,bool Aux, string StoreLog[21][10]
+                    , int day,bool idledisplay,int rowinaday, bool actionsmorethan
+                    , int action, bool Specificport,int specificport,bool USEREXCEPT, bool jumpport, int portfrom, int portend
+                    , bool specificday,bool jumpday,int dayfrom,int dayend, int totalpolicy, bool blocksametime,int sametimeblock,  bool boolcontinuous, int continuoustimes
+                    , bool rules3,int rules3time,bool defaults,bool jumpspecificport , int PORTS[21],int totalport
+                    ,bool jumpspecificday,int totalday,int numberofday,int daysrecordjump[10]
+                    )
+{
+    string actions;
+    if(Aw)
+    {
+        actions = actions+"w";
+    }
+    if(Ax)
+    {
+        actions = actions+"x";
+    }
+    if(Ar)
+    {
+        actions = actions+"r";
+    }
+    int start=0,loop=21, loop2 = 10, start2 =0;
+    string record [21][10];
+    string temp_record;
+    string FINDSPECIFICUSERATALLDIFFERENTPORT[30][10];
+    for(int i = start ; i<loop ; i++)
+    {
+        for(int j = start2 ; j<loop2 ; j++)
+        {
+            record[i][j] = StoreLog[i][j];
+        }
+    }
+
+    int pointer =0;
+    int counter=0;
+    for(int i = 0 ; i< 21; i++)  // port
+    {
+        for(int j = 0 ; j < 60 ; j=j+2 )
+        {
+            for( int k = 0 ; k<10; k++)   // day
+            {
+
+                FINDSPECIFICUSERATALLDIFFERENTPORT[j/2][k]=FINDSPECIFICUSERATALLDIFFERENTPORT[j/2][k]+record[i][k].substr(j,2);
+            }
+        }
+    }
+    string verify[21] { "NULL" };
+    if(ALLPORT == true || Specificport == true)
+    {
+        start=0,loop=21 ;
+    }
+    else if (jumpport == true)
+    {
+        start=portfrom;
+        loop=portend+1;
+    }
+    if( (ALLDAY == true && jumpport==false) || (specificday == true && jumpport== false))
+    {
+        start=0,loop=21 ;
+    }
+    else if(jumpday == true)
+    {
+        start2=dayfrom;
+        loop2=dayend;
+    }
+
+    if(jumpspecificport == true )
+    {
+        start=0;
+        loop = totalport;
+    }
+
+    if(jumpspecificday == true )
+    {
+        start2=0;
+        loop2 = totalday;
+    }
+    int oout=0;
+    for(int i =start ; i<loop ; i++)
+    {
+    int iout=0;
+        for(int j = start2 ; j<loop2 ; j++)
+        {
+            if (ALLDAY == false && specificday == true && jumpspecificday ==false )           //if specific day
+            {
+                j=day;
+                temp_record = StoreLog[i][j];
+            }
+            else
+            {
+                temp_record = StoreLog[i][j];
+            }
+            if( ALLPORT ==false && Specificport == true && jumpspecificport==false) //if specific port
+            {
+                i = specificport;
+                temp_record = StoreLog[i][j];
+            }
+            else
+            {
+                temp_record = StoreLog[i][j];
+            }
+
+            int temp,temp1;
+            if(jumpspecificday)
+            {
+                //temp_record = StoreLog[i][j];
+                temp1=daysrecordjump[iout];
+                temp_record=StoreLog[i][temp1];
+            }
+
+            if(jumpspecificport == true ) //if specific port
+            {
+                //temp_record = StoreLog[i][j];
+                temp=PORTS[oout];
+                temp=temp-4000;
+                temp_record=StoreLog[temp][j];
+            }
+            int counterport;int counterday;
+            if(blocksametime ==false && rules3 == false && jumpspecificport ==false)
+            {
+//                if(i < 10)
+//                {
+//                    cout<<"On port 400"<<i<<" on Day "<<j<<" ";
+//                }
+//                else
+//                {
+//                    cout<<"On port 40"<<i<<" on Day "<<j<<" ";
+//                }
+                    counterport=i;
+                    counterday=j;
+            }
+            else if(jumpspecificport == true && !jumpspecificday && blocksametime==false && rules3==false)
+            {
+//                if( temp<=9 )
+//                {
+//                    cout<<"On port 400"<<temp<<" on Day "<<j<<" ";
+//                }
+//                else
+//                {
+//                cout<<"On port 40"<<temp<<" on Day "<<j<<" ";
+//                }
+                counterport=temp;
+                counterday=j;
+            }
+            else if(jumpspecificday == true && !jumpspecificport&& blocksametime==false && rules3==false)
+            {
+//                if( i<=9 )
+//                {
+//                    cout<<"On port 400"<<i<<" on Day "<<temp1<<" ";
+//                }
+//                else
+//                {
+//                    cout<<"On port 40"<<i<<" on Day "<<temp1<<" ";
+//                }
+                counterport=i;
+                counterday=temp1;
+            }
+            else if(jumpspecificport && jumpspecificday)
+            {
+                 temp_record=StoreLog[temp][iout];
+//                if( temp<=9 )
+//                {
+//                    cout<<"On port 400"<<temp<<" on Day "<<temp1<<" ";
+//                }
+//                else
+//                {
+//                cout<<"On port 40"<<temp<<" on Day "<<temp1<<" ";
+//                }
+                counterport=temp;
+                counterday=temp1;
+            }
+
+            if(Ra == true)
+            {
+                USER="X";
+                checkRa(temp_record, Ar, Aw, Ax, actionsmorethan,action, totalpolicy, FINDSPECIFICUSERATALLDIFFERENTPORT,  boolcontinuous,  continuoustimes,blocksametime,sametimeblock,defaults,counterport,counterday);             //record anonymous user and all read , write ,execution
+            }
+            else if(Au == true)
+            {
+                USER="ABCDEGFHIJKLMXZ";
+                checkAu(temp_record, Ar, Aw, Ax,actionsmorethan,action,totalpolicy,FINDSPECIFICUSERATALLDIFFERENTPORT, boolcontinuous, continuoustimes,blocksametime, sametimeblock,defaults,counterport,counterday);
+            }
+            else if(FindUser == true  )
+            {
+                for(int i = 0; i < USER.length() ; i++)
+                {
+                    string temp;
+                    temp = USER[i];
+                    CheckUser(temp_record, Ar, Aw, Ax,temp,idledisplay,rowinaday, actionsmorethan,action,totalpolicy,FINDSPECIFICUSERATALLDIFFERENTPORT,  boolcontinuous,  continuoustimes,blocksametime, sametimeblock,defaults , totalport, jumpspecificport,PORTS,counterport,counterday);
+                }
+                if(defaults)
+                {
+                cout<<endl;
+                }
+            }
+            else if (Aux == true )
+            {
+                string temp="ABCDEFGHIJKLMXZ";
+                string target= "ABCDEFGHIJKLM";
+                char a ;
+                for( int d = 0 ; d < target.length(); d++ )
+                {
+                    a = target[d];
+                    for(int i = 0 ; i<temp.length(); i++)
+                    {
+                        if(temp[i] == a)
+                        {
+                            temp[i]='\0';
+                        }
+                    }
+                }
+                USER=temp;
+                recordExceptAnonymous(temp_record, Ar, Aw, Ax, actionsmorethan,action, USER,totalpolicy,FINDSPECIFICUSERATALLDIFFERENTPORT, boolcontinuous,  continuoustimes, blocksametime, sametimeblock,defaults,counterport,counterday);
+            }
+            else if(USEREXCEPT==true)
+            {
+                string temp="ABCDEFGHIJKLMXZ";
+                string target= USER;
+                char a ;
+                for( int d = 0 ; d < target.length(); d++ )
+                {
+                    a = target[d];
+                    for(int i = 0 ; i<temp.length(); i++)
+                    {
+                        if(temp[i] == a)
+                        {
+                            temp[i]='\0';
+                        }
+                    }
+                }
+                USER=temp;
+
+                recordExceptAnonymous(temp_record, Ar, Aw, Ax, actionsmorethan,action, USER,totalpolicy,FINDSPECIFICUSERATALLDIFFERENTPORT, boolcontinuous,  continuoustimes, blocksametime, sametimeblock,defaults,counterport,counterday);
+            }
+            else if(idle== true || idledisplay == true)
+            {
+                USER = "Z";
+                CheckUser(temp_record, Ar, Aw, Ax,USER,idledisplay,rowinaday, actionsmorethan,action,totalpolicy,FINDSPECIFICUSERATALLDIFFERENTPORT,  boolcontinuous,  continuoustimes,blocksametime, sametimeblock,defaults, totalport,  jumpspecificport,  PORTS,counterport,counterday);
+            }
+            if(jumpspecificday == true)
+            {
+                iout++;
+                continue;
+            }
+            else if(jumpspecificday == true && iout ==loop2-1 )
+            {
+                break;
+            }
+            else if(specificday == true && ALLDAY ==false && jumpday == false)
+            {
+                break;
+            }
+            }
+        if(blocksametime == false && rules3 == false )
+            cout<<endl;
+        if(jumpspecificport == true)
+        {
+                oout++;
+                continue;
+        }
+        else if(Specificport==true && ALLPORT == false && jumpport==false )
+        {
+            break;
+        }
+    }
+    if(blocksametime)
+    {
+        RecordSameTimeSamePort(FINDSPECIFICUSERATALLDIFFERENTPORT,USER, sametimeblock,actions);
+    }
+    else if (rules3)
+    {
+        RolesOf_TheDay( StoreLog, USER,  rules3time, actions);
+    }
+}
+
+
+void recordExceptAnonymous(string temprecord, bool Ar,bool Aw,bool Ax,bool actionsmorethan,int action,string USER,int totalpolicy,string FINDSPECIFICUSERATALLDIFFERENTPORT[30][10],bool boolcontinuous, int continuoustimes,bool blocksametime,int sametimeblock,bool defaults,int counterport ,int counterday)
+{
+    ofstream log("logs.txt",ios::app);
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    string a = temprecord;
+    string target = USER;
+    int pointer;
+    int counter;
+    do
+    {
+        std::size_t found =a.find(target,pointer);
+        counter= 0;
+        if (found!=std::string::npos)
+        {
+            a =  a.substr(0,found) + a.substr(found+2);
+            counter =1;
+        }
+    }
+    while (counter != 0 );
+    temprecord = a;
+
+    string temp =temprecord, execute="x", read="r", write="w";
+    temprecord = "";
+    pointer = 0;
+    string finalstring,temprecords;
+    counter =0;
+    do                                     //find port needed or not
+    {
+        counter =0;
+        std::size_t found =temp.find(read,pointer);
+        std::size_t found1 =temp.find(write,pointer);
+        std::size_t found2 =temp.find(execute,pointer);
+        if( found1 < found )
+        {
+            found = found1 ;
+        }
+        if ( found2 < found1 )
+        {
+            found1 = found2 ;
+        }
+        if(found2 < found)
+        {
+            found = found2;
+        }
+        if (found!=std::string::npos)
+        {
+            temprecord = temp.substr(found-1,2);
+            pointer = found + 1;
+            counter =1;
+
+            if( Ar == true )
+            {
+                //pointer = 0;
+                std::size_t found =temprecord.find(read,0);
+                if (found!=std::string::npos)
+                {
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+                }
+            }
+
+            if(Aw ==true )
+            {
+                // pointer = 0;
+                std::size_t found =temprecord.find(write,0);
+                if (found!=std::string::npos)
+                {
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+                }
+            }
+
+            if(Ax ==true )
+            {
+                std::size_t found =temprecord.find(execute,0);
+                if (found!=std::string::npos)
+                {
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+                }
+            }
+        }
+    }
+    while(counter!=0);
+    int length = finalstring.length() / 2;
+
+    if(actionsmorethan==true)
+    {
+        if(length==0 || length < action )
+        {
+            cout<<"It occur "<<length<<" times only .  Filtered Traffic: "<<finalstring;
+        }
+        else if(length >= action  )
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+            if( counterport<=9 )
+                {
+                cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday;
+            }
+            else
+            {
+            cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+            log<<LOGDATA[6]<<counterport<<LOGDATA[7]<<counterday;
+            }
+            cout<<"BASELINE ALERT : Action more than "<<action<<" . It occur "<< length<<" times . Filtered Traffic: "<<finalstring ;
+            SetConsoleTextAttribute(hConsole, 7);
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[9]<<length<<LOGDATA[10]<<finalstring<<endl;
+        }
+    }
+    else if( boolcontinuous == true)
+    {
+        blockinarowcontinue( finalstring,  boolcontinuous, continuoustimes, Aw, Ax, Ar );
+    }
+    else if(defaults== true)
+    {
+        if(finalstring.compare("")==0)
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+            cout<<"NULL";
+            SetConsoleTextAttribute(hConsole, 7);
+        }
+        else
+        {
+            cout<<finalstring;
+            if( counterport<=9 )
+                {
+                cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                    log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday;
+            }
+        else
+                {
+        cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+        log<<LOGDATA[6]<<counterport<<LOGDATA[7]<<counterday;
+            }
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[11]<<finalstring<<endl;
+        }
+
+
+    }
+
+}
+void CheckUser(string temprecord,bool Ar,bool Aw,bool Ax,string USER,bool idledisplay,int rowinaday,bool actionsmorethan,int action,int totalpolicy,string FINDSPECIFICUSERATALLDIFFERENTPORT[30][10], bool boolcontinuous, int continuoustimes,bool blocksametime,int sametimeblock,bool defaults,int totalport, bool jumpspecificport, int PORTS[21],int counterport ,int counterday)
+        //record specific user
+{
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE); //console colour
+    ofstream log("logs.txt",ios::app);
+    string temp =temprecord, execute=USER + "x", read=USER+"r", write=USER+"w";
+    temprecord = "";
+    string permission="";
+    if(Ar)
+    {
+        permission=permission+"r";
+    }
+    if(Ax)
+    {
+        permission=permission+"x";
+    }
+    if(Aw)
+    {
+        permission=permission+"w";
+    }
+    int pointer = 0;
+    string finalstring,temprecords;
+    int counter =0;
+    do                                     //find port needed or not
+    {
+        counter =0;
+        std::size_t found =temp.find(USER,pointer);
+        if (found!=std::string::npos)
+        {
+            temprecord = temp.substr(found,2);
+            pointer = found + 1;
+            counter =1;
+
+            if( Ar == true )
+            {
+                //pointer = 0;
+                std::size_t found =temprecord.find(read,0);
+                if (found!=std::string::npos)
+                {
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+
+                }
+            }
+
+            if(Aw ==true )
+            {
+                // pointer = 0;
+                std::size_t found =temprecord.find(write,0);
+                if (found!=std::string::npos)
+                {
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+                }
+            }
+
+            if(Ax ==true )
+            {
+                std::size_t found =temprecord.find(execute,0);
+                if (found!=std::string::npos)
+                {
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+                }
+            }
+        }
+    }
+    while(counter!=0);
+    int length = finalstring.length()/2;
+    if(idledisplay == true)
+    {
+        if(length==0 || length < rowinaday )
+        {
+
+            cout<<"\nNULL , it occur only "<<length<<" times . ";
+
+        }
+        else if(length >= rowinaday  )
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+            if( counterport<=9 )
+                {
+                    cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                    log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday<<" ";
+                }
+                else
+                {
+                cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+                log<<LOGDATA[6]<<counterport<<LOGDATA[7]<<counterday<<" ";
+                }
+            cout<<"BASELINE ALERT : Inactive more than or equal "<<rowinaday<<" . It occur "<< length<<" times . Filtered packets : "<<finalstring<<"";
+            SetConsoleTextAttribute(hConsole, 7);
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[9]<<length<<LOGDATA[10]<<finalstring<<endl;
+        }
+
+    }
+    else if(actionsmorethan==true)
+    {
+        if(length==0 || length < action )
+        {
+            cout<<"\nIt occur "<<length<<" times only .  Filtered Traffic: "<<finalstring ;
+        }
+        else if(length >= action  )
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+            if( counterport<=9 )
+                {
+                cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                    log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday;
+            }
+        else
+                {
+        cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+        log<<LOGDATA[6]<<counterport<<LOGDATA[7]<<counterday;
+            }
+            cout<<"\nBASELINE ALERT : Action more than "<<action<<" . It occur "<< length<<" times . Filtered Traffic: "<<finalstring;
+            SetConsoleTextAttribute(hConsole, 7);
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[9]<<length<<LOGDATA[10]<<finalstring<<endl;
+        }
+
+    }
+    else if(idledisplay == false && actionsmorethan == false && defaults==true)
+    {
+        if(finalstring.compare("")==0)
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+            cout<<"NULL";
+            SetConsoleTextAttribute(hConsole, 7);
+        }
+        else
+        {
+            cout<<finalstring;
+            if( counterport<=9 )
+                {
+                cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                    log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday;
+            }
+        else
+                {
+        cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+        log<<LOGDATA[6]<<counterport<<LOGDATA[7]<<counterday;
+            }
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[10]<<finalstring<<endl;
+        }
+    }
+    else if( boolcontinuous == true)
+    blockinarowcontinue( finalstring,  boolcontinuous, continuoustimes, Aw, Ax, Ar );
+}
+
+
+//Record only ANONYMOUS USER
+void checkRa(string temprecord, bool Ar,bool Aw,bool Ax, bool actionsmorethan,int action,int totalpolicy,string FINDSPECIFICUSERATALLDIFFERENTPORT[30][10], bool boolcontinuous, int continuoustimes,bool blocksametime,int sametimeblock,bool defaults,int counterport ,int counterday)
+{
+    ofstream log("logs.txt",ios::app);
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE); //console colour
+    //  cout<<"temprecord is "<<temprecord<<endl;
+    string temp =temprecord;
+    char SPECIFICUSER = 'X';
+    string permission="";
+    if(Ar)
+    {
+        permission=permission+"r";
+    }
+    if(Ax)
+    {
+        permission=permission+"x";
+    }
+    if(Aw)
+    {
+        permission=permission+"w";
+    }
+    temprecord = "";
+    string temprecords;
+    int pointer = 0;
+    int counter =0;
+    string finalstring="";
+    do                                     //find port needed or not
+    {
+        counter =0;
+        std::size_t found =temp.find("X",pointer);
+        if (found!=std::string::npos)
+        {
+            temprecord =  temp.substr(found,2);
+            pointer = found + 1;
+            counter =1;
+
+            if( Ar == true )
+            {
+                std::size_t found =temprecord.find("Xr",0);
+                if (found!=std::string::npos)
+                {
+                    finalstring = finalstring + temprecord;
+                }
+            }
+
+            if(Aw ==true )
+            {
+                std::size_t found =temprecord.find("Xw",0);
+                if (found!=std::string::npos)
+                {
+                    finalstring = finalstring + temprecord;
+                }
+            }
+
+            if(Ax ==true )
+            {
+                std::size_t found =temprecord.find("Xx",0);
+                if (found!=std::string::npos)
+                {
+
+                    finalstring = finalstring + temprecord;
+                }
+            }
+        }
+    }
+    while(counter!=0);
+    int length = finalstring.length() / 2;
+//                if( counterport<=9 )
+//                {
+//                    cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+//                }
+//                else
+//                {
+//                cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+//                }
+    if(actionsmorethan==true)
+    {
+        if(length==0 || length < action )
+        {
+            cout<<"It occur "<<length<<" times only .  Filtered Traffic: "<<finalstring ;
+        }
+        else if(length >= action  )
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+            if( counterport<=9 )
+                {
+                cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                    log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday;
+            }
+        else
+                {
+        cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+        log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday;
+            }
+            cout<<"BASELINE ALERT : Action more than "<<action<<" . It occur "<< length<<" times . Filtered Traffic: "<<finalstring ;
+            SetConsoleTextAttribute(hConsole, 7);
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[9]<<length<<LOGDATA[12]<<endl;
+        }
+
+    }
+    else if( boolcontinuous == true)
+    {
+        blockinarowcontinue( finalstring,  boolcontinuous, continuoustimes, Aw, Ax, Ar );
+    }
+
+    else if(defaults== true)
+    {
+        if(finalstring.compare("")==0)
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+            cout<<"NULL";
+            SetConsoleTextAttribute(hConsole, 7);
+        }
+        else
+        {
+            if( counterport<=9 )
+                {
+                cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday;
+            }
+        else
+                {
+        cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+        log<<LOGDATA[6]<<counterport<<LOGDATA[7]<<counterday;
+            }
+                cout<<finalstring<<endl;
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[9]<<length<<LOGDATA[10]<<finalstring<<endl;
+        }
+    }
+    cout<<endl;
+
+}
+//Record All Users
+void checkAu(string temprecord, bool Ar,bool Aw,bool Ax, bool actionsmorethan,int action,int totalpolicy,string FINDSPECIFICUSERATALLDIFFERENTPORT[30][10], bool boolcontinuous, int continuoustimes,bool blocksametime,int sametimeblock,bool defaults,int counterport ,int counterday)
+{
+    ofstream log("logs.txt",ios::app);
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE); //console colour
+    string USER ="ABCDEFGHIJKLMXZ";
+    string actions = "wrx";
+    string temp =temprecord, execute="x", read="r", write="w";
+    temprecord = "";
+    int pointer = 0;
+    string finalstring,temprecords;
+    int counter =0;
+    do                                     //find port needed or not
+    {
+        counter =0;
+        std::size_t found =temp.find(read,pointer);
+        std::size_t found1 =temp.find(write,pointer);
+        std::size_t found2 =temp.find(execute,pointer);
+
+        if( found1 < found )
+        {
+            found = found1 ;
+        }
+        if ( found2 < found1 )
+        {
+            found1 = found2 ;
+        }
+        if(found2 < found)
+        {
+            found = found2;
+        }
+
+        if (found!=std::string::npos)
+        {
+            temprecord = temp.substr(found-1,2);
+            pointer = found + 1;
+            counter =1;
+
+            if( Ar == true )
+            {
+                //pointer = 0;
+                std::size_t found =temprecord.find(read,0);
+                if (found!=std::string::npos)
+                {
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+                }
+            }
+
+            if(Aw ==true )
+            {
+                // pointer = 0;
+                std::size_t found =temprecord.find(write,0);
+                if (found!=std::string::npos)
+                {
+
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+
+                }
+            }
+
+            if(Ax ==true )
+            {
+                std::size_t found =temprecord.find(execute,0);
+                if (found!=std::string::npos)
+                {
+                    temprecords =  temprecord.substr(0,2);
+                    finalstring = finalstring + temprecords;
+
+                }
+            }
+        }
+    }
+    while(counter!=0);
+    int length = finalstring.length()/2;
+    if(actionsmorethan==true)
+    {
+        if(length==0 || length < action )
+        {
+            cout<<"It occur "<<length<<" times only .  Filtered Traffic: "<<finalstring;
+        }
+        else if(length >= action  )
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+                if( counterport<=9 )
+                {
+                    cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                    log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday<<" ";
+                }
+                else
+                {
+                cout<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday<<" ";
+                }
+
+            cout<<"BASELINE ALERT : Action more than "<<action<<" . It occur "<< length<<" times . Filtered Traffic: "<<finalstring;
+            SetConsoleTextAttribute(hConsole, 7);
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[13]<<action <<LOGDATA[14]<<length<<LOGDATA[12]<<endl;
+        }
+    }
+    else if( boolcontinuous == true)
+        blockinarowcontinue( finalstring,  boolcontinuous, continuoustimes, Aw, Ax, Ar );
+    else if(defaults== true)
+    {
+        if(finalstring.compare("")==0)
+        {
+            SetConsoleTextAttribute(hConsole, 12);
+            //cout<<"NULL";
+            SetConsoleTextAttribute(hConsole, 7);
+        }
+        else
+        {
+            if( counterport<=9 )
+                {
+                    cout<<"On port 400"<<counterport<<" on Day "<<counterday<<" ";
+                    log<<LOGDATA[5]<<counterport<<LOGDATA[7]<<counterday<<" ";
+                }
+                else
+                {
+                cout<<"On port 40"<<counterport<<" on Day "<<counterday<<" ";
+                log<<LOGDATA[6]<<counterport<<LOGDATA[7]<<counterday<<" ";
+                }
+
+            log<<LOGDATA[8]<<totalpolicy<<LOGDATA[9]<<length<<LOGDATA[10]<<finalstring<<endl;
+        }
+    }
+}
+
+
+
+void blockinarowcontinue(string finalstring,bool boolcontinuoustimes, int times,bool Aw, bool Ax, bool Ar )  //rules 1
+{
+    int appeartimes=0;
+    string storeuser;
+    char COMPAREVALUE ='Y';
+    for(int i = 0; i<finalstring.length(); i=i+2)
+    {
+        char temporary = finalstring[i];
+        if(COMPAREVALUE=='Y' || (COMPAREVALUE!='Y'  && temporary==COMPAREVALUE))
+        {
+            COMPAREVALUE=finalstring[i];
+            appeartimes++;
+
+        }
+        else if(temporary != COMPAREVALUE)
+        {
+            if(appeartimes >= times)
+            {
+                cout<<"\t["<<COMPAREVALUE<<"] appear more than ["<<times<<"] and it occur ["<<appeartimes<<"]  continuously in a block ";
+            }
+            COMPAREVALUE=finalstring[i];
+            appeartimes=1 ;
+        }
+
+        if(i == finalstring.length()-1 && appeartimes >= times)
+        {
+            cout<<"Matches "<<COMPAREVALUE;
+        }
+    }
+    cout<<endl;
+}
+//only apply for ALL USER rules 4
+void RecordSameTimeSamePort(string FINDSPECIFICUSERATALLDIFFERENTPORT[30][10],string USER, int sametimeblock,string action)
+{
+    ofstream log("logs.txt",ios::app);
+    for(int j = 0 ; j < 10 ; j ++)
+    {
+        for (int i = 0 ; i < 30 ; i ++)
+        {
+            string temp =  FINDSPECIFICUSERATALLDIFFERENTPORT[i][j];
+            cout<<"Day ["<<j<<"] Time [";
+            if(i<=9)
+                cout<<"0";  // just alignment
+
+            cout<<i<<"] "<<FINDSPECIFICUSERATALLDIFFERENTPORT[i][j] << " ";
+            string userRestriction = USER;
+            string actionRestriction = action;
+            //typedef std::map<std::pair<char, char>, int > Maptype;
+            map<char, int> m;
+            for (int i = 0; i < temp.length(); i+=2)
+            {
+                char user = temp[i];
+                char action = temp[i + 1];
+                if (userRestriction.find(user) != std::string::npos && actionRestriction.find(action) != std::string::npos)
+                {
+                    m[user]++;
+                }
+            }
+            cout<<"Result --> ";
+            int counter =0;
+            int check=0;
+            for ( auto it:m)
+            {
+                    if (it.second >= sametimeblock)
+                    {
+                    cout << it.first << ':' << it.second<<"   ";
+                    log <<"#rules "<<LOGDATA[17]<<j<<LOGDATA[18];
+                    if(i<=9)
+                    {
+                            log<<"0";
+                    }
+                    log<<i<<LOGDATA[19];
+                    check=1;
+                    log<< it.first <<LOGDATA[16]<<" "<< it.second<<"  ";
+                    }
+                    else if(it.second < sametimeblock)
+                    {
+                        check=0;
+                    }
+            }
+            if(check==1)
+            {
+                log<<endl;
+            }
+            cout<<endl;
+        }
+    }
+}
+void RolesOf_TheDay(string StoreLog[21][10],string USER, int rowoftheday,string action) // rules 3
+{
+    for(int j = 0 ; j < 10 ; j ++)
+    {
+        for (int i = 0 ; i < 21 ; i ++)
+        {
+            string temp =  StoreLog[i][j];
+            cout<<"Day ["<<j<<"] Port [";
+            if(i<=9)
+                cout<<"0";  // just alignment
+
+            cout<<i<<"] "<<StoreLog[i][j] << " ";
+            string userRestriction = USER;
+            string actionRestriction = action;
+            //typedef std::map<std::pair<char, char>, int > Maptype;
+            map<char, int> m;
+            for (int i = 0; i < temp.length(); i+=2)
+            {
+                char user = temp[i];
+                char action = temp[i + 1];
+                if (userRestriction.find(user) != std::string::npos && actionRestriction.find(action) != std::string::npos)
+                {
+                    m[user]++;
+                }
+            }
+            cout<<"Result --> ";
+            for ( auto it:m)
+            {
+                if (it.second >= rowoftheday)
+                    cout << it.first << ':' << it.second<<"   ";
+            }
+            cout<<endl;
+        }
+    }
+}
+void readFiltering()
+{
+
+}

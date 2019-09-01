@@ -1,0 +1,39 @@
+###THIS TO SPECIFY USER A ,B,C with any read , write ,execute actions with block 2##-SuZ,A,B,C, -Ax -Aw -Ar -C2
+#AuXZ -C2 -p4010,4011,4013,4015,4018,4019,4020
+#-Ar -Aw -Ax -SuZ
+#-Ar -Aw- Ax attach4 
+#-Au -Ar -Ax -Aw 
+-Au -Ar -Ax -Aw -attach3 -JD03-05 -JP4010-4015
+#AuXZ,G -Aw -Ar- Ax -C2
+#-Ax -p4013
+#-p4010,4011 -C5 -SuZ -Ax -Ar -Ax
+#-Ra -Ax -Aw -Ar
+#-Au attach5 -Aw -Ax -Ar
+#-SuA,B,C,D,X,Z -blocksametime4 -Ar -Aw -Ax
+#-Au -Ax -p4013,4015,4009 actions more than10
+#Rules 1 -Au -C3 -Aw -Ar -Ax
+#Rules 1 -Ra -C1 -Aw -Ar -Ax
+#Rules 2 -Ra -Ax -Ar -Aw 
+#-Ax Rules 3 -Au -Day3 -Ar
+#Rules 4 -SuG,F -Ax
+#Rules 5 -Au -Ax
+#-SuA,B,C -Ax -Ar -Aw -blocksametime2
+#-AuXA,B,C,D,E,F,G -Ax -Aw  -attach3
+#-SuAZB -Ax -Ar -Aw actions more than3
+#-JP4010-4018 -Au -Ax -Aw -Ar -JD01-05
+#-Ra -Aw -Ax -Ar
+#-SuX -Aw -Ax -Ar
+#-Au -Ax -Aw -Ar actions more than4
+#-Au -blocksametime3 -Aw 
+#Au -Ax -p4013
+#-C4 -Au -Ar -Ax -Aw
+#-Au -Ar -Aw -Ax
+#-Au -Ax -Aw -Ar -p4010,4011,4015,4019 -Day0,1,2,6,7,8,3
+#-SuZB attach2 -Ax -Aw -Ar -Day015789
+#-Au attach2 -Ax -Aw -Ar -Day015789
+#Au -Ar -Ax -Aw
+#-Au -Ax
+#-Au -C5 -Aw -Ar -Ax rules 29
+#-SuABCDE -blocksametime4 -Ar -Aw -Ax
+#-Au -Ax -p4010,4011,4012,4015,4017 -Day5
+#-Au -Ar -Aw -Ax -blocksametime1

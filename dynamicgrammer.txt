@@ -1,0 +1,23 @@
+-p
+-idle
+-Ax
+-Ar
+-Aw
+-Ra
+inactive more than
+-JP
+-JD
+-Day
+A!X
+AuX
+actions more than
+-Su
+-blocksametime
+-C
+attach
+R:
+-X
+-W
+-R
+M
+#here this is the guides . If you change here , make sure you also change the filter policy thanks .

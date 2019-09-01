@@ -1,0 +1,15 @@
+# depslib dependency file v1.0
+1539098249 source:c:\users\sam\desktop\system security assignment 2\main.cpp
+	<iostream>
+	<fstream>
+	<map>
+	<sstream>
+	<windows.h>
+	<cstring>
+	<string>
+	"functionprototype.h"
+
+1539097092 c:\users\sam\desktop\system security assignment 2\functionprototype.h
+	<iostream>
+	<string>
+
